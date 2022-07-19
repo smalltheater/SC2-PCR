@@ -135,6 +135,8 @@ int main()
         float feat0[fpfh0->size()*33];
         float feat1[fpfh1->size()*33];
 
+
+#pragma omp parallel for num_threads(8)
         for(int i=0;i<cloud0->size();i++)
         {
 

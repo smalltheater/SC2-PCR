@@ -26,7 +26,7 @@ set(cnpy "/home/yunqi/snap/tools/cnpy/release/lib")
 #target_link_libraries(cnpy ${ZLIB_LIBRARIES})
 #install(TARGETS "cnpy" LIBRARY DESTINATION lib PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 
-add_executable(dcgan src/main.cpp src/SC2PCR.cpp  src/YamlServer.cpp src/utility.cpp)
+add_executable(visualize src/main.cpp src/SC2PCR.cpp  src/YamlServer.cpp src/utility.cpp)
 #target_compile_options(dcgan PRIVATE ${OpenMP_CXX_FLAGS})
 target_link_libraries(visualize
         ${TORCH_LIBRARIES}
