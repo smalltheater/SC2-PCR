@@ -1,6 +1,11 @@
 #include "utility.h"
 #include "YamlServer.h"
 #include "SC2PCR.h"
+#include "omp.h"
+#include <pcl/point_types.h>
+#include <pcl/PCLPointCloud2.h>
+#include <pcl/common/distances.h>
+#include <pcl/kdtree/kdtree_flann.h>
 
 
 void preprocess_point_cloud( pcl::PointCloud<pcl::PointXYZI>::Ptr cloud ,
@@ -15,13 +20,13 @@ void preprocess_point_cloud( pcl::PointCloud<pcl::PointXYZI>::Ptr cloud ,
     sor.setInputCloud(cloud);
     sor.setLeafSize(down_sample,down_sample,down_sample);
     sor.filter(*pcd_down);
-//    cout<<"Cloud filtered size is :"<<pcd_down->size()<<endl;
+    cout<<"Cloud filtered size is :"<<pcd_down->size()<<endl;
 
     ne.setInputCloud(pcd_down);
     pcl::search::KdTree<pcl::PointXYZI>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZI> ());
     ne.setSearchMethod (tree);
-    ne.setRadiusSearch(down_sample*2);
-//    ne.setKSearch(30);
+//    ne.setRadiusSearch(down_sample);
+    ne.setKSearch(30);
     ne.compute(*normals);
 //    cout<< "Cloud normal sizes is :"<< normals->size()<<endl;
 
@@ -29,7 +34,8 @@ void preprocess_point_cloud( pcl::PointCloud<pcl::PointXYZI>::Ptr cloud ,
     fpfhe.setSearchMethod(tree2);
     fpfhe.setInputCloud(pcd_down);
     fpfhe.setInputNormals(normals);
-    fpfhe.setRadiusSearch(down_sample*5);
+    fpfhe.setRadiusSearch(down_sample*2);
+//    fpfhe.setKSearch(100);
     fpfhe.compute(*fpfh);
 
     cloud->clear();
@@ -38,6 +44,40 @@ void preprocess_point_cloud( pcl::PointCloud<pcl::PointXYZI>::Ptr cloud ,
 //    cout<<"FPFH features sizes is :"<<fpfh->size()<<endl;
 
 
+}
+
+float caculateRMSE(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud_source, pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud_target)
+{
+//    pcl::PointCloud<pcl::PointXYZ>::Ptr xyz_source(new pcl::PointCloud<pcl::PointXYZ>());
+////    fromPCLPointCloud2(*cloud_source, *xyz_source);
+//    pcl::PointCloud<pcl::PointXYZ>::Ptr xyz_target(new pcl::PointCloud<pcl::PointXYZ>());
+//    fromPCLPointCloud2(*cloud_target, *xyz_target);
+
+    float rmse = 0.0f;
+
+    pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr tree(new pcl::KdTreeFLANN<pcl::PointXYZI>());
+    tree->setInputCloud(cloud_target);
+
+    for (auto point_i : *cloud_source)
+    {
+        // 去除无效的点
+        if (!pcl_isfinite(point_i.x) || !pcl_isfinite(point_i.y) || !pcl_isfinite(point_i.z))
+            continue;
+        pcl::Indices nn_indices(1);
+        std::vector<float> nn_distances(1);
+        if (!tree->nearestKSearch(point_i, 1, nn_indices, nn_distances)) // K近邻搜索获取匹配点对
+            continue;
+        /*dist的计算方法之一
+        size_t point_nn_i = nn_indices.front();
+        float dist = squaredEuclideanDistance(point_i, xyz_target->points[point_nn_i]);
+        */
+
+        float dist = nn_distances[0]; // 获取最近邻对应点之间欧氏距离的平方
+        rmse += dist;                 // 计算平方距离之和
+    }
+    rmse = std::sqrt(rmse / static_cast<float> (cloud_source->points.size())); // 计算均方根误差
+
+    return rmse;
 }
 
 
@@ -117,6 +157,8 @@ int main()
         pcl::io::loadPCDFile<pcl::PointXYZI>(config.data_path1,*cloud1);
         pcl::copyPointCloud(*cloud0,*cloud0_raw);
         pcl::copyPointCloud(*cloud1,*cloud1_raw);
+        std::cout<<"Load cloud 0 with "<<cloud0->points.size()<<" points from file"<<std::endl;
+        std::cout<<"Load cloud 1 with "<<cloud1->points.size()<<" points from file"<<std::endl;
 
         TicToc t(true);
 
@@ -126,8 +168,8 @@ int main()
 
         preprocess_point_cloud(cloud0,fpfh0,0.3f);
         preprocess_point_cloud(cloud1,fpfh1,0.3f);
-        std::cout<<"Load cloud 0 with "<<cloud0->points.size()<<" points from file"<<std::endl;
-        std::cout<<"Load cloud 1 with "<<cloud1->points.size()<<" points from file"<<std::endl;
+        t.toc("PrePROCESSED");
+
 
 
         float pc0[cloud0->size()*3];
@@ -135,20 +177,27 @@ int main()
         float feat0[fpfh0->size()*33];
         float feat1[fpfh1->size()*33];
 
+t.tic();
 
-#pragma omp parallel for num_threads(8)
-        for(int i=0;i<cloud0->size();i++)
-        {
+torch::set_num_interop_threads(8);
+        omp_set_num_threads(8);
 
-            pc0[i*3]=cloud0->points[i].x;
-            pc0[i*3+1]=cloud0->points[i].y;
-            pc0[i*3+2]=cloud0->points[i].z;
-            for(int j=0;j<33;j++)
+
+            for(int i=0;i<cloud0->size();i++)
             {
-                feat0[i*33+j]=fpfh0->points[i].histogram[j];
+                pc0[i*3]=cloud0->points[i].x;
+                pc0[i*3+1]=cloud0->points[i].y;
+                pc0[i*3+2]=cloud0->points[i].z;
+                for(int j=0;j<33;j++)
+                {
+                    feat0[i*33+j]=fpfh0->points[i].histogram[j];
+                }
+
             }
 
-        }
+
+
+        t.toc("omp");
 
         for(int i=0;i<cloud1->size();i++)
         {
@@ -188,7 +237,6 @@ int main()
 
         auto res = matcher.SC2_PCR(pair_pts.first, pair_pts.second);
 
-        cout<<res<<endl;
         t.toc("Finished");
 
 
@@ -220,6 +268,7 @@ int main()
 
 
         pcl::transformPointCloud(*cloud0_raw,*cloud0_raw,T.matrix());
+        pcl::transformPointCloud(*cloud0,*cloud0,T.matrix());
 
         pcl::visualization::PCLVisualizer::Ptr viewer2 (new pcl::visualization::PCLVisualizer ("PointCloud with registration"));
         viewer2->setBackgroundColor (255, 255, 255);
@@ -238,6 +287,28 @@ int main()
             viewer2->spinOnce (100);
 
         }
+
+
+        pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
+        icp.setMaxCorrespondenceDistance(150); // giseop , use a value can cover 2*historyKeyframeSearchNum range in meter
+        icp.setMaximumIterations(100);
+        icp.setTransformationEpsilon(1e-6);
+        icp.setEuclideanFitnessEpsilon(1e-6);
+        icp.setRANSACIterations(0);
+
+        // Align pointclouds
+        icp.setInputSource(cloud0);
+        icp.setInputTarget(cloud1);
+
+        pcl::PointCloud<pcl::PointXYZI>::Ptr unused_result(new pcl::PointCloud<pcl::PointXYZI>());
+        icp.align(*unused_result);
+
+        std::cout<<"The fitness score is: "<<icp.getFitnessScore()<<endl;
+
+        t.tic();
+        std::cout<<caculateRMSE(cloud0_raw,cloud1_raw)<<std::endl;
+        t.toc("RMSE");
+        std::cout<<caculateRMSE(cloud0,cloud1)<<std::endl;
 
 
     }

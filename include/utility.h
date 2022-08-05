@@ -7,6 +7,7 @@
 #include <iostream>
 #include <string>
 #include <torch/torch.h>
+#include <ATen/ATen.h>
 #include <cuda_runtime_api.h>
 #include <c10/cuda/CUDAGuard.h>
 #include<complex>

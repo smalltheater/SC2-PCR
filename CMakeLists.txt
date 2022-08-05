@@ -6,12 +6,21 @@ set(CMAKE_CXX_STANDARD 17)
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g -pthread")
 
-find_package(Torch REQUIRED)
 find_package(yaml-cpp REQUIRED )
 #find_package(ZLIB REQUIRED)
 find_package(PCL REQUIRED QUIET)
-#find_package(OpenMP REQUIRED)
+find_package(OpenMP REQUIRED)
 
+##cuda and libtorch##
+## path should be modified
+set(CMAKE_PREFIX_PATH /home/yunqi/libtorch/)
+include_directories(/home/yunqi/libtorch/include)
+include_directories(/home/yunqi/libtorch/include/torch/csrc/api/include)
+include_directories(/usr/local/cuda/include)
+link_directories(/home/yunqi/libtorch)
+##
+
+find_package(Torch REQUIRED)
 
 include_directories(include
         ${YAML_CPP_INCLUDE_DIR}
@@ -19,18 +28,13 @@ include_directories(include
         ${PCL_INCLUDE_DIRS})
 link_directories(  ${PCL_LIBRARY_DIRS})
 
-set(cnpy "/home/yunqi/snap/tools/cnpy/release/lib")
-
-#
-#add_library(cnpy SHARED "src/cnpy.cpp")
-#target_link_libraries(cnpy ${ZLIB_LIBRARIES})
-#install(TARGETS "cnpy" LIBRARY DESTINATION lib PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 
 add_executable(visualize src/main.cpp src/SC2PCR.cpp  src/YamlServer.cpp src/utility.cpp)
-#target_compile_options(dcgan PRIVATE ${OpenMP_CXX_FLAGS})
+target_compile_options(visualize PRIVATE ${OpenMP_CXX_FLAGS})
 target_link_libraries(visualize
         ${TORCH_LIBRARIES}
         yaml-cpp
        # cnpy
+        ${OpenMP_CXX_FLAGS}
         ${PCL_LIBRARIES} )
 
