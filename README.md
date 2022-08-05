@@ -17,11 +17,16 @@ cxx11 ABI version is required
 
 ### [YAML](https://github.com/jbeder/yaml-cpp)
 
+
 ## Build Options:
-    cmake -DCMAKE_PREFIX_PATH=/path/to/your/libtorch/ -DCMAKE_CUDA_COMPILER:PATH=/usr/local/cuda/bin/nvcc ..
+    (Modify your libtorch path in CMakeList.txt before compilation)
+    mkdir build
+    cd build
+    cmake ..
  Then run the file:
 
     ./build/visualize
+
 
 The original point cloud and the aligned point cloud are shown on screen
 ![](config/SC2-PCR.png)
