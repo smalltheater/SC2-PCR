@@ -7,7 +7,7 @@
 
 YamlParam::YamlParam()
 {
-    YAML::Node config = YAML::LoadFile("/home/yunqi/Desktop/SC2-pcr/config/params.yaml");
+    YAML::Node config = YAML::LoadFile("../config/params.yaml");
 
     num_iterations   = config["num_iterations"].as<int>();
 
